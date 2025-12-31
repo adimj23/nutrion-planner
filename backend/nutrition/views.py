@@ -1,10 +1,14 @@
 from django.shortcuts import render
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from django.contrib.auth.models import User
-from .models import UserProfile, Food
-from .serializers import UserSerializer, UserProfileSerializer, UserWithProfileSerializer, FoodSerializer
+from .models import UserProfile, Food, Meal, MealPlan
+from .serializers import (
+    UserSerializer, UserProfileSerializer, UserWithProfileSerializer, 
+    FoodSerializer, MealSerializer, MealPlanSerializer, GroceryListSerializer
+)
+from .services import MealPlanGenerator, GroceryListGenerator
 
 # Create your views here.
 @api_view(['GET'])
@@ -114,3 +118,126 @@ class FoodViewSet(viewsets.ModelViewSet):
         if search:
             queryset = queryset.filter(name__icontains=search)
         return queryset
+
+
+# ----------------------------
+# Meal ViewSet
+# ----------------------------
+class MealViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Meal CRUD operations.
+    """
+    queryset = Meal.objects.all()
+    serializer_class = MealSerializer
+    
+    def get_queryset(self):
+        """
+        Optionally filter meals by meal_type.
+        """
+        queryset = Meal.objects.all()
+        meal_type = self.request.query_params.get('meal_type', None)
+        if meal_type:
+            queryset = queryset.filter(meal_type=meal_type)
+        return queryset
+
+
+# ----------------------------
+# MealPlan ViewSet
+# ----------------------------
+class MealPlanViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for MealPlan CRUD operations.
+    """
+    queryset = MealPlan.objects.all()
+    serializer_class = MealPlanSerializer
+    
+    def get_queryset(self):
+        """
+        Filter meal plans by user if user_id is provided.
+        """
+        queryset = MealPlan.objects.all()
+        user_id = self.request.query_params.get('user_id', None)
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        return queryset
+    
+    @action(detail=False, methods=['post'], url_path='generate')
+    def generate_meal_plan(self, request):
+        """
+        Generate a meal plan for a user based on their calorie targets.
+        
+        Expected POST data:
+        {
+            "user_id": 1,
+            "num_days": 1  # optional, defaults to 1
+        }
+        """
+        user_id = request.data.get('user_id')
+        num_days = request.data.get('num_days', 1)
+        
+        if not user_id:
+            return Response(
+                {"detail": "user_id is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            num_days = int(num_days)
+            if num_days < 1 or num_days > 30:
+                return Response(
+                    {"detail": "num_days must be between 1 and 30."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (ValueError, TypeError):
+            return Response(
+                {"detail": "num_days must be a valid integer."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            meal_plan = MealPlanGenerator.generate_meal_plan(user, num_days=num_days)
+            serializer = MealPlanSerializer(meal_plan)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Error generating meal plan: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'], url_path='grocery-list')
+    def get_grocery_list(self, request, pk=None):
+        """
+        Get the grocery list for a meal plan.
+        Returns consolidated list of all foods needed with total quantities.
+        """
+        try:
+            meal_plan = self.get_object()
+        except MealPlan.DoesNotExist:
+            return Response(
+                {"detail": "Meal plan not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        grocery_items = GroceryListGenerator.generate_grocery_list(meal_plan)
+        
+        response_data = {
+            'meal_plan_id': meal_plan.id,
+            'items': grocery_items,
+            'total_items': len(grocery_items)
+        }
+        
+        serializer = GroceryListSerializer(response_data)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -3,8 +3,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from django.contrib.auth.models import User
-from .models import UserProfile
-from .serializers import UserSerializer, UserProfileSerializer, UserWithProfileSerializer
+from .models import UserProfile, Food
+from .serializers import UserSerializer, UserProfileSerializer, UserWithProfileSerializer, FoodSerializer
 
 # Create your views here.
 @api_view(['GET'])
@@ -92,3 +92,25 @@ class UserProfileViewSet(viewsets.ViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ----------------------------
+# Food ViewSet
+# ----------------------------
+class FoodViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Food CRUD operations.
+    Provides list, create, retrieve, update, and destroy actions.
+    """
+    queryset = Food.objects.all()
+    serializer_class = FoodSerializer
+    
+    def get_queryset(self):
+        """
+        Optionally filter foods by search query parameter.
+        """
+        queryset = Food.objects.all()
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        return queryset

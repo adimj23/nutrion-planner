@@ -31,20 +31,18 @@ function GroceryList() {
 
   if (loading) {
     return (
-      <div className="px-4 py-8">
-        <div className="text-center">Loading grocery list...</div>
-      </div>
+      <div className="text-center">Loading grocery list...</div>
     );
   }
 
   if (error || !groceryList) {
     return (
-      <div className="px-4 py-8">
+      <>
         <div className="text-center text-red-600">{error || 'Grocery list not found'}</div>
         <Link to="/meal-plans" className="text-indigo-600 hover:text-indigo-900 mt-4 inline-block">
           ← Back to Meal Plans
         </Link>
-      </div>
+      </>
     );
   }
 
@@ -59,8 +57,8 @@ function GroceryList() {
   );
 
   return (
-    <div className="px-4 py-8">
-      <div className="max-w-4xl mx-auto">
+    <>
+      <div>
         <div className="mb-6">
           <Link
             to={`/meal-plans/${groceryList.meal_plan_id}`}
@@ -155,7 +153,7 @@ function GroceryList() {
           </table>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

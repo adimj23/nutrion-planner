@@ -45,15 +45,13 @@ function Users() {
 
   if (loading) {
     return (
-      <div className="px-4 py-8">
-        <div className="text-center">Loading users...</div>
-      </div>
+      <div className="text-center">Loading users...</div>
     );
   }
 
   return (
-    <div className="px-4 py-8">
-      <div className="max-w-6xl mx-auto">
+    <>
+      <div>
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Users</h1>
           <button
@@ -188,7 +186,7 @@ function Users() {
           </table>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

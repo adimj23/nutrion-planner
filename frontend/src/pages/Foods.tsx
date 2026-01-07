@@ -27,15 +27,13 @@ function Foods() {
 
   if (loading) {
     return (
-      <div className="px-4 py-8">
-        <div className="text-center">Loading foods...</div>
-      </div>
+      <div className="text-center">Loading foods...</div>
     );
   }
 
   return (
-    <div className="px-4 py-8">
-      <div className="max-w-6xl mx-auto">
+    <>
+      <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Foods Database</h1>
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -114,7 +112,7 @@ function Foods() {
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

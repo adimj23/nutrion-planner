@@ -10,13 +10,19 @@ export interface User {
 export interface UserProfile {
   id: number;
   age: number;
+  gender: 'male' | 'female' | 'other';
   height: number;
   weight: number;
   activity_level: string;
+  weight_goal_type: 'lose' | 'maintain' | 'gain';
+  goal_weight?: number;
+  weight_change_per_week: number;
   calorie_target: number;
   protein_target: number;
   carb_target: number;
   fat_target: number;
+  bmr?: number;
+  tdee?: number;
   created_at: string;
   updated_at: string;
 }

@@ -62,15 +62,13 @@ function MealPlans() {
 
   if (loading) {
     return (
-      <div className="px-4 py-8">
-        <div className="text-center">Loading meal plans...</div>
-      </div>
+      <div className="text-center">Loading meal plans...</div>
     );
   }
 
   return (
-    <div className="px-4 py-8">
-      <div className="max-w-6xl mx-auto">
+    <>
+      <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-6">Meal Plans</h1>
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -193,7 +191,7 @@ function MealPlans() {
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

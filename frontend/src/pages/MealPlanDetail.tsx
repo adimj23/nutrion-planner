@@ -31,20 +31,18 @@ function MealPlanDetail() {
 
   if (loading) {
     return (
-      <div className="px-4 py-8">
-        <div className="text-center">Loading meal plan...</div>
-      </div>
+      <div className="text-center">Loading meal plan...</div>
     );
   }
 
   if (error || !mealPlan) {
     return (
-      <div className="px-4 py-8">
+      <>
         <div className="text-center text-red-600">{error || 'Meal plan not found'}</div>
         <Link to="/meal-plans" className="text-indigo-600 hover:text-indigo-900 mt-4 inline-block">
           ← Back to Meal Plans
         </Link>
-      </div>
+      </>
     );
   }
 
@@ -57,8 +55,8 @@ function MealPlanDetail() {
   }, {} as Record<string, typeof mealPlan.meals>);
 
   return (
-    <div className="px-4 py-8">
-      <div className="max-w-6xl mx-auto">
+    <>
+      <div>
         <div className="mb-6">
           <Link
             to="/meal-plans"
@@ -161,7 +159,7 @@ function MealPlanDetail() {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }
 

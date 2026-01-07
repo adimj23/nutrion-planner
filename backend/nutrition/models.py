@@ -40,12 +40,48 @@ class UserProfile(models.Model):
         ('extra_active', 'Extra Active'),
     ]
     
+    GENDER_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+    ]
+    
+    WEIGHT_GOAL_TYPE_CHOICES = [
+        ('lose', 'Lose Weight'),
+        ('maintain', 'Maintain Weight'),
+        ('gain', 'Gain Weight'),
+    ]
+    
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='userprofile')
     age = models.PositiveIntegerField()
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, default='male', help_text="Gender for BMR calculation")
     height = models.DecimalField(max_digits=5, decimal_places=2, help_text="Height (inches)")
     weight = models.DecimalField(max_digits=5, decimal_places=2, help_text="Weight (lbs)")
     activity_level = models.CharField(max_length=20, choices=ACTIVITY_LEVEL_CHOICES)
-    calorie_target = models.PositiveIntegerField()
+    
+    # Weight goals
+    weight_goal_type = models.CharField(
+        max_length=10, 
+        choices=WEIGHT_GOAL_TYPE_CHOICES, 
+        default='maintain',
+        help_text="Weight goal: lose, maintain, or gain"
+    )
+    goal_weight = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Goal weight in lbs (optional if maintaining)"
+    )
+    weight_change_per_week = models.DecimalField(
+        max_digits=4, 
+        decimal_places=2, 
+        default=0.5,
+        help_text="Pounds to lose/gain per week (typically 0.5-2 lbs)"
+    )
+    
+    # Calculated targets (can be auto-calculated or manually set)
+    calorie_target = models.PositiveIntegerField(help_text="Daily calorie target (auto-calculated from BMR and goals)")
     protein_target = models.DecimalField(max_digits=6, decimal_places=2, help_text="Protein target in grams")
     carb_target = models.DecimalField(max_digits=6, decimal_places=2, help_text="Carb target in grams")
     fat_target = models.DecimalField(max_digits=6, decimal_places=2, help_text="Fat target in grams")

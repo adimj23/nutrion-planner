@@ -132,15 +132,13 @@ function Constraints() {
 
   if (loading) {
     return (
-      <div className="px-4 py-8">
-        <div className="text-center">Loading constraints...</div>
-      </div>
+      <div className="text-center">Loading constraints...</div>
     );
   }
 
   return (
-    <div className="px-4 py-8">
-      <div className="max-w-6xl mx-auto">
+    <>
+      <div>
         <div className="mb-6">
           <Link
             to="/users"
@@ -377,7 +375,7 @@ function Constraints() {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

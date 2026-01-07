@@ -1,9 +1,11 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from decimal import Decimal
 from .models import (
     UserProfile, Food, Meal, MealFood, MealPlan,
     FoodCategory, DietaryPattern, UserDietaryPreference, UserAllergy, UserFoodDislike
 )
+from .calorie_calculator import CalorieCalculator
 
 class UserSerializer(serializers.ModelSerializer):
     # Make password write-only
@@ -22,14 +24,33 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    # Computed fields for display
+    bmr = serializers.SerializerMethodField()
+    tdee = serializers.SerializerMethodField()
+    
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'age', 'height', 'weight', 'activity_level',
+            'id', 'age', 'gender', 'height', 'weight', 'activity_level',
+            'weight_goal_type', 'goal_weight', 'weight_change_per_week',
             'calorie_target', 'protein_target', 'carb_target', 'fat_target',
+            'bmr', 'tdee',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'bmr', 'tdee']
+    
+    def get_bmr(self, obj):
+        """Calculate and return BMR."""
+        return CalorieCalculator.calculate_bmr(
+            obj.weight, obj.height, obj.age, obj.gender
+        )
+    
+    def get_tdee(self, obj):
+        """Calculate and return TDEE."""
+        bmr = CalorieCalculator.calculate_bmr(
+            obj.weight, obj.height, obj.age, obj.gender
+        )
+        return CalorieCalculator.calculate_tdee(bmr, obj.activity_level)
     
     def validate_age(self, value):
         if value < 1 or value > 150:
@@ -38,13 +59,50 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     def validate_height(self, value):
         if value <= 0 or value > 300:
-            raise serializers.ValidationError("Height must be between 0 and 120 in.")
+            raise serializers.ValidationError("Height must be between 0 and 300 in.")
         return value
     
     def validate_weight(self, value):
         if value <= 0 or value > 1000:
             raise serializers.ValidationError("Weight must be between 0 and 1000 lbs.")
         return value
+    
+    def validate_weight_change_per_week(self, value):
+        if value < 0 or value > 5:
+            raise serializers.ValidationError("Weight change per week should be between 0 and 5 lbs.")
+        return value
+    
+    def validate(self, data):
+        """Auto-calculate calorie and macro targets if key fields are provided."""
+        # Get existing values or new values
+        weight = data.get('weight', getattr(self.instance, 'weight', None) if self.instance else None)
+        height = data.get('height', getattr(self.instance, 'height', None) if self.instance else None)
+        age = data.get('age', getattr(self.instance, 'age', None) if self.instance else None)
+        gender = data.get('gender', getattr(self.instance, 'gender', 'male') if self.instance else 'male')
+        activity_level = data.get('activity_level', getattr(self.instance, 'activity_level', None) if self.instance else None)
+        weight_goal_type = data.get('weight_goal_type', getattr(self.instance, 'weight_goal_type', 'maintain') if self.instance else 'maintain')
+        weight_change_per_week = data.get('weight_change_per_week', getattr(self.instance, 'weight_change_per_week', Decimal('0.5')) if self.instance else Decimal('0.5'))
+        
+        # Only calculate if we have the minimum required fields
+        if weight and height and age and activity_level:
+            # Calculate targets
+            targets = CalorieCalculator.calculate_all_targets(
+                weight, height, age, gender, activity_level,
+                weight_goal_type, weight_change_per_week
+            )
+            
+            # Auto-set calorie target if not explicitly provided
+            if 'calorie_target' not in data or data.get('calorie_target') is None:
+                data['calorie_target'] = targets['calorie_target']
+            
+            # Auto-calculate macros if not explicitly provided
+            if 'protein_target' not in data or data.get('protein_target') is None:
+                macros = CalorieCalculator.calculate_macro_targets(targets['calorie_target'])
+                data['protein_target'] = Decimal(str(macros['protein_target']))
+                data['carb_target'] = Decimal(str(macros['carb_target']))
+                data['fat_target'] = Decimal(str(macros['fat_target']))
+        
+        return data
 
 class UserWithProfileSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(source='userprofile', read_only=True)

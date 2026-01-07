@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import UserProfile, Food, Meal, MealFood, MealPlan
+from .models import (
+    UserProfile, Food, Meal, MealFood, MealPlan,
+    FoodCategory, DietaryPattern, UserDietaryPreference, UserAllergy, UserFoodDislike
+)
 
 class UserSerializer(serializers.ModelSerializer):
     # Make password write-only
@@ -45,19 +48,41 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserWithProfileSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(source='userprofile', read_only=True)
+    dietary_preferences = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'profile']
+        fields = ['id', 'username', 'email', 'profile', 'dietary_preferences']
+    
+    def get_dietary_preferences(self, obj):
+        preferences = UserDietaryPreference.objects.filter(user=obj)
+        return UserDietaryPreferenceSerializer(preferences, many=True).data
+
+
+class FoodCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FoodCategory
+        fields = ['id', 'name', 'description']
+        read_only_fields = ['id']
 
 
 class FoodSerializer(serializers.ModelSerializer):
+    categories = FoodCategorySerializer(many=True, read_only=True)
+    category_ids = serializers.PrimaryKeyRelatedField(
+        queryset=FoodCategory.objects.all(),
+        source='categories',
+        many=True,
+        write_only=True,
+        required=False
+    )
+    
     class Meta:
         model = Food
         fields = [
             'id', 'name', 'calories_per_100g', 'protein_per_100g', 
             'carbs_per_100g', 'fat_per_100g', 'fiber_per_100g', 
-            'sugar_per_100g', 'created_at', 'updated_at'
+            'sugar_per_100g', 'categories', 'category_ids',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
@@ -207,3 +232,84 @@ class GroceryListSerializer(serializers.Serializer):
     meal_plan_id = serializers.IntegerField()
     items = GroceryItemSerializer(many=True)
     total_items = serializers.IntegerField()
+
+
+# Constraint-related serializers
+
+class DietaryPatternSerializer(serializers.ModelSerializer):
+    excluded_categories = FoodCategorySerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = DietaryPattern
+        fields = ['id', 'name', 'description', 'excluded_categories']
+        read_only_fields = ['id']
+
+
+class UserDietaryPreferenceSerializer(serializers.ModelSerializer):
+    pattern = DietaryPatternSerializer(read_only=True)
+    pattern_id = serializers.PrimaryKeyRelatedField(
+        queryset=DietaryPattern.objects.all(),
+        source='pattern',
+        write_only=True
+    )
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    
+    class Meta:
+        model = UserDietaryPreference
+        fields = [
+            'id', 'user', 'pattern', 'pattern_id', 'custom_notes',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+
+class UserAllergySerializer(serializers.ModelSerializer):
+    food = FoodSerializer(read_only=True, required=False)
+    food_id = serializers.PrimaryKeyRelatedField(
+        queryset=Food.objects.all(),
+        source='food',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    
+    class Meta:
+        model = UserAllergy
+        fields = [
+            'id', 'user', 'food', 'food_id', 'allergen_name', 'severity', 'notes',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        # Ensure either food or allergen_name is provided
+        if not data.get('food') and not data.get('allergen_name'):
+            raise serializers.ValidationError(
+                "Either food_id or allergen_name must be provided."
+            )
+        return data
+
+
+class UserFoodDislikeSerializer(serializers.ModelSerializer):
+    food = FoodSerializer(read_only=True)
+    food_id = serializers.PrimaryKeyRelatedField(
+        queryset=Food.objects.all(),
+        source='food',
+        write_only=True
+    )
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    
+    class Meta:
+        model = UserFoodDislike
+        fields = ['id', 'user', 'food', 'food_id', 'reason', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+
+class UserConstraintsSummarySerializer(serializers.Serializer):
+    """Serializer for user constraints summary (from ConstraintService)."""
+    dietary_patterns = serializers.ListField()
+    allergies = serializers.ListField()
+    dislikes = serializers.ListField()
+    total_allowed_foods = serializers.IntegerField()
+    total_excluded_foods = serializers.IntegerField()

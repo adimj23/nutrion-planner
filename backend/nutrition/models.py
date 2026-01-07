@@ -4,6 +4,33 @@ from decimal import Decimal
 
 # Create your models here.
 
+class FoodCategory(models.Model):
+    """
+    Food categories/tags for dietary filtering.
+    Examples: contains_dairy, contains_gluten, is_vegetarian, is_vegan, etc.
+    """
+    CATEGORY_CHOICES = [
+        ('contains_dairy', 'Contains Dairy'),
+        ('contains_gluten', 'Contains Gluten'),
+        ('is_vegetarian', 'Vegetarian'),
+        ('is_vegan', 'Vegan'),
+        ('is_meat', 'Meat'),
+        ('is_seafood', 'Seafood'),
+        ('is_egg', 'Contains Egg'),
+        ('is_nut', 'Contains Nuts'),
+        ('is_soy', 'Contains Soy'),
+    ]
+    
+    name = models.CharField(max_length=50, choices=CATEGORY_CHOICES, unique=True)
+    description = models.TextField(blank=True)
+    
+    class Meta:
+        verbose_name_plural = "Food Categories"
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.get_name_display()
+
 class UserProfile(models.Model):
     ACTIVITY_LEVEL_CHOICES = [
         ('sedentary', 'Sedentary'),
@@ -53,6 +80,7 @@ class Food(models.Model):
         blank=True, 
         help_text="Sugar in grams per 100g (optional)"
     )
+    categories = models.ManyToManyField(FoodCategory, blank=True, related_name='foods', help_text="Dietary categories/tags for this food")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -191,3 +219,117 @@ class MealPlan(models.Model):
             'carbs': round(total_carbs, 2),
             'fat': round(total_fat, 2),
         }
+
+
+class DietaryPattern(models.Model):
+    """
+    Dietary patterns that users can follow.
+    Examples: vegetarian, vegan, keto, paleo, gluten-free, etc.
+    """
+    PATTERN_CHOICES = [
+        ('vegetarian', 'Vegetarian'),
+        ('vegan', 'Vegan'),
+        ('keto', 'Keto'),
+        ('paleo', 'Paleo'),
+        ('gluten_free', 'Gluten-Free'),
+        ('dairy_free', 'Dairy-Free'),
+        ('pescatarian', 'Pescatarian'),
+        ('halal', 'Halal'),
+        ('kosher', 'Kosher'),
+    ]
+    
+    name = models.CharField(max_length=50, choices=PATTERN_CHOICES, unique=True)
+    description = models.TextField(blank=True)
+    
+    # Define which food categories are excluded for this pattern
+    excluded_categories = models.ManyToManyField(
+        FoodCategory, 
+        blank=True, 
+        related_name='excluded_in_patterns',
+        help_text="Food categories that violate this dietary pattern"
+    )
+    
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self):
+        return self.get_name_display()
+
+
+class UserDietaryPreference(models.Model):
+    """
+    Links users to their dietary patterns.
+    Users can have multiple dietary preferences.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dietary_preferences')
+    pattern = models.ForeignKey(DietaryPattern, on_delete=models.CASCADE)
+    custom_notes = models.TextField(blank=True, help_text="Optional custom dietary notes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = [['user', 'pattern']]
+        ordering = ['pattern__name']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.pattern.get_name_display()}"
+
+
+class UserAllergy(models.Model):
+    """
+    User allergies and intolerances.
+    Can reference specific Food items or use text for allergens not in database.
+    """
+    SEVERITY_CHOICES = [
+        ('mild', 'Mild'),
+        ('moderate', 'Moderate'),
+        ('severe', 'Severe'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='allergies')
+    food = models.ForeignKey(
+        Food, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        help_text="Specific food in database (if applicable)"
+    )
+    allergen_name = models.CharField(
+        max_length=200,
+        help_text="Name of allergen (required if food is not specified)"
+    )
+    severity = models.CharField(
+        max_length=20, 
+        choices=SEVERITY_CHOICES, 
+        default='moderate',
+        help_text="Severity of the allergy"
+    )
+    notes = models.TextField(blank=True, help_text="Additional notes about the allergy")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name_plural = "User Allergies"
+        ordering = ['allergen_name']
+    
+    def __str__(self):
+        if self.food:
+            return f"{self.user.username} - Allergic to {self.food.name}"
+        return f"{self.user.username} - Allergic to {self.allergen_name}"
+
+
+class UserFoodDislike(models.Model):
+    """
+    Foods that a user explicitly dislikes (not allergies, just preferences).
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='food_dislikes')
+    food = models.ForeignKey(Food, on_delete=models.CASCADE)
+    reason = models.TextField(blank=True, help_text="Optional reason for disliking this food")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = [['user', 'food']]
+        ordering = ['food__name']
+    
+    def __str__(self):
+        return f"{self.user.username} dislikes {self.food.name}"

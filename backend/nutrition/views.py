@@ -2,13 +2,20 @@ from django.shortcuts import render
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError
 from django.contrib.auth.models import User
-from .models import UserProfile, Food, Meal, MealPlan
+from .models import (
+    UserProfile, Food, Meal, MealPlan,
+    UserDietaryPreference, UserAllergy, UserFoodDislike, DietaryPattern, FoodCategory
+)
 from .serializers import (
     UserSerializer, UserProfileSerializer, UserWithProfileSerializer, 
-    FoodSerializer, MealSerializer, MealPlanSerializer, GroceryListSerializer
+    FoodSerializer, MealSerializer, MealPlanSerializer, GroceryListSerializer,
+    UserDietaryPreferenceSerializer, UserAllergySerializer, UserFoodDislikeSerializer,
+    DietaryPatternSerializer, FoodCategorySerializer, UserConstraintsSummarySerializer
 )
 from .services import MealPlanGenerator, GroceryListGenerator
+from .constraint_service import ConstraintService
 
 # Create your views here.
 @api_view(['GET'])
@@ -46,6 +53,34 @@ class UserViewSet(viewsets.ViewSet):
             user = serializer.save()
             return Response(UserWithProfileSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'], url_path='allowed-foods')
+    def get_allowed_foods(self, request, pk=None):
+        """
+        Get all foods allowed for a user based on their constraints.
+        """
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        allowed_foods = ConstraintService.get_allowed_foods(user)
+        serializer = FoodSerializer(allowed_foods, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], url_path='constraints-summary')
+    def get_constraints_summary(self, request, pk=None):
+        """
+        Get a summary of all constraints for a user.
+        """
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        summary = ConstraintService.get_user_constraints_summary(user)
+        serializer = UserConstraintsSummarySerializer(summary)
+        return Response(serializer.data)
 
 
 # ----------------------------
@@ -118,6 +153,40 @@ class FoodViewSet(viewsets.ModelViewSet):
         if search:
             queryset = queryset.filter(name__icontains=search)
         return queryset
+    
+    @action(detail=True, methods=['get'], url_path='check-allowed')
+    def check_allowed(self, request, pk=None):
+        """
+        Check if a food is allowed for the authenticated user.
+        Requires authentication (for future implementation).
+        For now, requires user_id query parameter.
+        """
+        food = self.get_object()
+        user_id = request.query_params.get('user_id', None)
+        
+        if not user_id:
+            return Response(
+                {"detail": "user_id query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        is_allowed = ConstraintService.is_food_allowed(user, food)
+        exclusion_reasons = []
+        
+        if not is_allowed:
+            exclusion_reasons = ConstraintService.get_exclusion_reasons(user, food)
+        
+        return Response({
+            'food_id': food.id,
+            'food_name': food.name,
+            'is_allowed': is_allowed,
+            'exclusion_reasons': exclusion_reasons
+        })
 
 
 # ----------------------------
@@ -241,3 +310,118 @@ class MealPlanViewSet(viewsets.ModelViewSet):
         
         serializer = GroceryListSerializer(response_data)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# ----------------------------
+# Constraint-related ViewSets
+# ----------------------------
+
+class UserDietaryPreferenceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user dietary preferences.
+    """
+    serializer_class = UserDietaryPreferenceSerializer
+    
+    def get_queryset(self):
+        """
+        Filter preferences by user_id if provided.
+        """
+        queryset = UserDietaryPreference.objects.all()
+        user_id = self.request.query_params.get('user_id', None)
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """
+        Set the user from the URL parameter or request data.
+        """
+        user_id = self.request.data.get('user_id') or self.kwargs.get('user_pk')
+        if user_id:
+            try:
+                user = User.objects.get(pk=user_id)
+                serializer.save(user=user)
+            except User.DoesNotExist:
+                raise ValidationError("User not found.")
+        else:
+            serializer.save()
+
+
+class UserAllergyViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user allergies.
+    """
+    serializer_class = UserAllergySerializer
+    
+    def get_queryset(self):
+        """
+        Filter allergies by user_id if provided.
+        """
+        queryset = UserAllergy.objects.all()
+        user_id = self.request.query_params.get('user_id', None)
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """
+        Set the user from the URL parameter or request data.
+        """
+        user_id = self.request.data.get('user_id') or self.kwargs.get('user_pk')
+        if user_id:
+            try:
+                user = User.objects.get(pk=user_id)
+                serializer.save(user=user)
+            except User.DoesNotExist:
+                raise ValidationError("User not found.")
+        else:
+            serializer.save()
+
+
+class UserFoodDislikeViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user food dislikes.
+    """
+    serializer_class = UserFoodDislikeSerializer
+    
+    def get_queryset(self):
+        """
+        Filter dislikes by user_id if provided.
+        """
+        queryset = UserFoodDislike.objects.all()
+        user_id = self.request.query_params.get('user_id', None)
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        return queryset
+    
+    def perform_create(self, serializer):
+        """
+        Set the user from the URL parameter or request data.
+        """
+        user_id = self.request.data.get('user_id') or self.kwargs.get('user_pk')
+        if user_id:
+            try:
+                user = User.objects.get(pk=user_id)
+                serializer.save(user=user)
+            except User.DoesNotExist:
+                raise ValidationError("User not found.")
+        else:
+            serializer.save()
+
+
+class DietaryPatternViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only ViewSet for dietary patterns.
+    Patterns are predefined and managed via admin.
+    """
+    queryset = DietaryPattern.objects.all()
+    serializer_class = DietaryPatternSerializer
+
+
+class FoodCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only ViewSet for food categories.
+    Categories are predefined and managed via admin.
+    """
+    queryset = FoodCategory.objects.all()
+    serializer_class = FoodCategorySerializer

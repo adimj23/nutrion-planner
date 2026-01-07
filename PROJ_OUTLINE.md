@@ -3,11 +3,11 @@
 ## 1. Project Overview
 
 **Goal:**  
-Build a web backend that allows users to:  
+Build a full-stack web app that allows users to:  
 - Set fitness goals (calories, macros, activity levels)  
-- Generate personalized meal plans based on goals, dietary restrictions, and preferences  
+- Generate personalized meal plans based on goals, dietary restrictions, and preferences (use an LLM)
 - Produce optimized grocery lists from meal plans  
-- Track exercise and adjust meal planning dynamically  
+- Allow for customizable weight/calorie goals and adjust meal planning dynamically  
 
 **Scope:**  
 The backend will be implemented in Django with Django REST Framework (DRF) for APIs. Future enhancements will include AI-based meal recommendations, optimization algorithms, and scalable architecture.

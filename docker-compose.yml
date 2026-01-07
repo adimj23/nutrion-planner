@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=nutrition_db
+      - POSTGRES_USER=nutrition_user
+      - POSTGRES_PASSWORD=nutrition_pass
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nutrition_user -d nutrition_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+  web:
+    build: ./backend
+    command: /app/entrypoint.sh
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_NAME=nutrition_db
+      - DB_USER=nutrition_user
+      - DB_PASSWORD=nutrition_pass
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DJANGO_SECRET_KEY=django-insecure-63*wb@tptxtq751yh4@xsg85fwe7x&lfvmw+unb$#0bt(gu5br
+      - DJANGO_DEBUG=True
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+

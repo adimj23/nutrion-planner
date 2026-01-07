@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db.models import Sum
 from .models import UserProfile, Food, Meal, MealFood, MealPlan
+from .constraint_service import ConstraintService
 
 
 class MealPlanGenerator:
@@ -40,8 +41,8 @@ class MealPlanGenerator:
         dinner_calories = calorie_target * MealPlanGenerator.DINNER_PERCENT
         
         # Get all available foods
-        all_foods = list(Food.objects.all())
-        if not all_foods:
+        allowed_foods = list(ConstraintService.get_allowed_foods(user))
+        if not allowed_foods:
             raise ValueError("No foods available in database. Please seed foods first.")
         
         # Create meals for each day
@@ -53,7 +54,7 @@ class MealPlanGenerator:
                 name=f"Breakfast Day {day + 1}",
                 meal_type='breakfast',
                 target_calories=breakfast_calories,
-                available_foods=all_foods
+                available_foods=allowed_foods
             )
             created_meals.append(breakfast)
             
@@ -62,7 +63,7 @@ class MealPlanGenerator:
                 name=f"Lunch Day {day + 1}",
                 meal_type='lunch',
                 target_calories=lunch_calories,
-                available_foods=all_foods
+                available_foods=allowed_foods
             )
             created_meals.append(lunch)
             
@@ -71,7 +72,7 @@ class MealPlanGenerator:
                 name=f"Dinner Day {day + 1}",
                 meal_type='dinner',
                 target_calories=dinner_calories,
-                available_foods=all_foods
+                available_foods=allowed_foods
             )
             created_meals.append(dinner)
         
